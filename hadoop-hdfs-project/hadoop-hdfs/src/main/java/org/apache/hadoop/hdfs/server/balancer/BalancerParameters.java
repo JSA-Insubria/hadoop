@@ -45,6 +45,8 @@ final class BalancerParameters {
    */
   private final boolean runDuringUpgrade;
 
+  private final boolean moveFile;
+
   static final BalancerParameters DEFAULT = new BalancerParameters();
 
   private BalancerParameters() {
@@ -60,6 +62,7 @@ final class BalancerParameters {
     this.sourceNodes = builder.sourceNodes;
     this.blockpools = builder.blockpools;
     this.runDuringUpgrade = builder.runDuringUpgrade;
+    this.moveFile = builder.moveFile;
   }
 
   BalancingPolicy getBalancingPolicy() {
@@ -94,6 +97,10 @@ final class BalancerParameters {
     return this.runDuringUpgrade;
   }
 
+  boolean getMoveFile() {
+    return this.moveFile;
+  }
+
   @Override
   public String toString() {
     return String.format("%s.%s [%s," + " threshold = %s,"
@@ -117,6 +124,7 @@ final class BalancerParameters {
     private Set<String> sourceNodes = Collections.<String> emptySet();
     private Set<String> blockpools = Collections.<String> emptySet();
     private boolean runDuringUpgrade = false;
+    private boolean moveFile = false;
 
     Builder() {
     }
@@ -158,6 +166,11 @@ final class BalancerParameters {
 
     Builder setRunDuringUpgrade(boolean run) {
       this.runDuringUpgrade = run;
+      return this;
+    }
+
+    Builder setMoveFile(boolean moveFile) {
+      this.moveFile = moveFile;
       return this;
     }
 

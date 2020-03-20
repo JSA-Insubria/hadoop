@@ -18,35 +18,26 @@
 package org.apache.hadoop.hdfs.server.balancer;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkElementIndex;
 import static org.apache.hadoop.hdfs.protocol.BlockType.CONTIGUOUS;
 
-import java.io.IOException;
-import java.io.PrintStream;
+import java.io.*;
+import java.lang.annotation.Target;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.text.DateFormat;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.hadoop.fs.*;
+import org.apache.hadoop.hdfs.*;
+import org.apache.hadoop.hdfs.protocol.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.HadoopIllegalArgumentException;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.StorageType;
-import org.apache.hadoop.hdfs.DFSConfigKeys;
-import org.apache.hadoop.hdfs.DFSUtil;
-import org.apache.hadoop.hdfs.HdfsConfiguration;
 import org.apache.hadoop.hdfs.server.balancer.Dispatcher.DDatanode;
 import org.apache.hadoop.hdfs.server.balancer.Dispatcher.DDatanode.StorageGroup;
 import org.apache.hadoop.hdfs.server.balancer.Dispatcher.Source;
@@ -177,6 +168,7 @@ public class Balancer {
   static final Path BALANCER_ID_PATH = new Path("/system/balancer.id");
 
   private static final String USAGE = "Usage: hdfs balancer"
+          + "\n\t[-printInfo]\tlist Block of File"
       + "\n\t[-policy <policy>]\tthe balancing policy: "
       + BalancingPolicy.Node.INSTANCE.getName() + " or "
       + BalancingPolicy.Pool.INSTANCE.getName()
@@ -454,12 +446,11 @@ public class Balancer {
     if (dispatcher.getCluster().isNodeGroupAware()) {
       chooseStorageGroups(Matcher.SAME_NODE_GROUP);
     }
-    
+
     // Then, match nodes on the same rack
     chooseStorageGroups(Matcher.SAME_RACK);
     // At last, match all remaining nodes
     chooseStorageGroups(Matcher.ANY_OTHER);
-    
     return dispatcher.bytesToMove();
   }
 
@@ -688,12 +679,24 @@ public class Balancer {
     LOG.info("source nodes = " + p.getSourceNodes());
     checkKeytabAndInit(conf);
     System.out.println("Time Stamp               Iteration#  Bytes Already Moved  Bytes Left To Move  Bytes Being Moved");
-    
     List<NameNodeConnector> connectors = Collections.emptyList();
     try {
       connectors = NameNodeConnector.newNameNodeConnectors(namenodes, 
               Balancer.class.getSimpleName(), BALANCER_ID_PATH, conf,
               p.getMaxIdleIteration());
+
+
+
+      if (p.getMoveFile()) {
+        FileBalancer fileBalancer = new FileBalancer(conf);
+        boolean fail = fileBalancer.moveBlocks(connectors);
+        if (fail)
+          return ExitStatus.IO_EXCEPTION.getExitCode();
+        else
+          return ExitStatus.SUCCESS.getExitCode();
+      }
+
+
 
       boolean done = false;
       for(int iteration = 0; !done; iteration++) {
@@ -769,7 +772,7 @@ public class Balancer {
   static class Cli extends Configured implements Tool {
     /**
      * Parse arguments and then run Balancer.
-     * 
+     *
      * @param args command specific arguments.
      * @return exit code. 0 indicates success, non-zero indicates failure.
      */
@@ -780,7 +783,6 @@ public class Balancer {
 
       try {
         checkReplicationPolicyCompatibility(conf);
-
         final Collection<URI> namenodes = DFSUtil.getInternalNsRpcUris(conf);
         return Balancer.run(namenodes, parse(args), conf);
       } catch (IOException e) {
@@ -866,6 +868,8 @@ public class Balancer {
                   + "upgrade. Most users will not want to run the balancer "
                   + "during an upgrade since it will not affect used space "
                   + "on over-utilized machines.");
+            } else if ("-moveFile".equalsIgnoreCase(args[i])) {
+              b.setMoveFile(true);
             } else {
               throw new IllegalArgumentException("args = "
                   + Arrays.toString(args));
