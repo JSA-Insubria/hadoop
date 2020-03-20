@@ -18,22 +18,21 @@
 package org.apache.hadoop.mapreduce;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.databind.JsonMappingException;
+import com.google.gson.JsonObject;
+import com.google.inject.internal.cglib.core.$DefaultNamingPolicy;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
@@ -43,8 +42,11 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapred.FileInputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.QueueACL;
+import org.apache.hadoop.util.hash.Hash;
+import org.codehaus.jackson.map.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -154,6 +156,7 @@ class JobSubmitter {
       conf.set(MRJobConfig.JOB_SUBMITHOST,submitHostName);
       conf.set(MRJobConfig.JOB_SUBMITHOSTADDR,submitHostAddress);
     }
+
     JobID jobId = submitClient.getNewJobID();
     job.setJobID(jobId);
     Path submitJobDir = new Path(jobStagingArea, jobId.toString());
@@ -198,6 +201,26 @@ class JobSubmitter {
       // Create the splits for the job
       LOG.debug("Creating splits at " + jtFs.makeQualified(submitJobDir));
       int maps = writeSplits(job, submitJobDir);
+
+
+
+      JobConf jConf = (JobConf)job.getConfiguration();
+      org.apache.hadoop.mapred.InputSplit[] splits =
+              jConf.getInputFormat().getSplits(jConf, jConf.getNumMapTasks());
+
+      List<String> paths = new ArrayList<>();
+      List<String> locations = new ArrayList<>();
+      for (Path path : FileInputFormat.getInputPaths(jConf)) {
+        paths.add(path.toString());
+      }
+      for (org.apache.hadoop.mapred.InputSplit inputSplit : splits) {
+        Collections.addAll(locations, inputSplit.getLocations());
+      }
+      saveJsonFile(new JobPrint(jobId.toString(), paths, locations));
+
+
+
+
       conf.setInt(MRJobConfig.NUM_MAPS, maps);
       LOG.info("number of splits:" + maps);
 
@@ -243,7 +266,8 @@ class JobSubmitter {
 
       // Write job file to submit dir
       writeConf(conf, submitJobFile);
-      
+
+
       //
       // Now, actually submit the job (using the submit name)
       //
@@ -262,6 +286,58 @@ class JobSubmitter {
           jtFs.delete(submitJobDir, true);
 
       }
+    }
+  }
+
+  private void saveJsonFile(JobPrint jobPrint) {
+    File jsonDirectory = new File(System.getProperty("user.home") + File.separator + "JobBlocks");
+    if (!jsonDirectory.exists()) {
+      jsonDirectory.mkdir();
+    }
+    if (jsonDirectory.exists()) {
+      try {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.writerWithDefaultPrettyPrinter().writeValue(new File(jsonDirectory + File.separator + jobPrint.getJobName() + ".json"), jobPrint);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+  }
+
+  private static class JobPrint {
+
+    private String jobName;
+    private List<String> paths;
+    private List<String> locations;
+
+    public JobPrint(String jobName, List<String> paths, List<String> locations) {
+      this.jobName = jobName;
+      this.paths = paths;
+      this.locations = locations;
+    }
+
+    public String getJobName() {
+      return jobName;
+    }
+
+    public void setJobName(String jobName) {
+      this.jobName = jobName;
+    }
+
+    public List<String> getPaths() {
+      return paths;
+    }
+
+    public void setPaths(List<String> paths) {
+      this.paths = paths;
+    }
+
+    public List<String> getLocations() {
+      return locations;
+    }
+
+    public void setLocations(List<String> locations) {
+      this.locations = locations;
     }
   }
   
@@ -330,12 +406,13 @@ class JobSubmitter {
     }
     return maps;
   }
-  
+
   //method to write splits for old api mapper.
   private int writeOldSplits(JobConf job, Path jobSubmitDir) 
   throws IOException {
     org.apache.hadoop.mapred.InputSplit[] splits =
     job.getInputFormat().getSplits(job, job.getNumMapTasks());
+
     // sort the splits into order based on size, so that the biggest
     // go first
     Arrays.sort(splits, new Comparator<org.apache.hadoop.mapred.InputSplit>() {
