@@ -32,6 +32,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.hdfs.*;
 import org.apache.hadoop.hdfs.protocol.*;
+import org.apache.hadoop.net.NetworkTopology;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.apache.hadoop.HadoopIllegalArgumentException;
@@ -695,6 +696,16 @@ public class Balancer {
         else
           return ExitStatus.SUCCESS.getExitCode();
       }
+      if (p.getClusterInfo()) {
+        ClusterInfo clusterInfo = new ClusterInfo(connectors);
+        clusterInfo.generateClusterInfo();
+        return ExitStatus.SUCCESS.getExitCode();
+      }
+      if (p.getFilesInfo()) {
+        FilesInfo filesInfo = new FilesInfo(connectors, conf);
+        filesInfo.generateFilesInfo();
+        return ExitStatus.SUCCESS.getExitCode();
+      }
 
 
 
@@ -870,6 +881,10 @@ public class Balancer {
                   + "on over-utilized machines.");
             } else if ("-moveFile".equalsIgnoreCase(args[i])) {
               b.setMoveFile(true);
+            } else if ("-clusterInfo".equalsIgnoreCase(args[i])) {
+              b.setClusterInfo(true);
+            } else if ("-filesInfo".equalsIgnoreCase(args[i])) {
+              b.setFilesInfo(true);
             } else {
               throw new IllegalArgumentException("args = "
                   + Arrays.toString(args));

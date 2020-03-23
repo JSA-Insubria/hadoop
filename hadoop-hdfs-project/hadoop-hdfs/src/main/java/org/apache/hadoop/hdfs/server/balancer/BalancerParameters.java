@@ -46,6 +46,8 @@ final class BalancerParameters {
   private final boolean runDuringUpgrade;
 
   private final boolean moveFile;
+  private final boolean clusterInfo;
+  private final boolean filesInfo;
 
   static final BalancerParameters DEFAULT = new BalancerParameters();
 
@@ -63,6 +65,8 @@ final class BalancerParameters {
     this.blockpools = builder.blockpools;
     this.runDuringUpgrade = builder.runDuringUpgrade;
     this.moveFile = builder.moveFile;
+    this.clusterInfo = builder.clusterInfo;
+    this.filesInfo = builder.filesInfo;
   }
 
   BalancingPolicy getBalancingPolicy() {
@@ -101,6 +105,14 @@ final class BalancerParameters {
     return this.moveFile;
   }
 
+  boolean getClusterInfo() {
+    return this.clusterInfo;
+  }
+
+  boolean getFilesInfo() {
+    return this.filesInfo;
+  }
+
   @Override
   public String toString() {
     return String.format("%s.%s [%s," + " threshold = %s,"
@@ -125,6 +137,8 @@ final class BalancerParameters {
     private Set<String> blockpools = Collections.<String> emptySet();
     private boolean runDuringUpgrade = false;
     private boolean moveFile = false;
+    private boolean clusterInfo = false;
+    private boolean filesInfo = false;
 
     Builder() {
     }
@@ -171,6 +185,16 @@ final class BalancerParameters {
 
     Builder setMoveFile(boolean moveFile) {
       this.moveFile = moveFile;
+      return this;
+    }
+
+    Builder setClusterInfo(boolean clusterInfo) {
+      this.clusterInfo = clusterInfo;
+      return this;
+    }
+
+    Builder setFilesInfo(boolean filesInfo) {
+      this.filesInfo = filesInfo;
       return this;
     }
 
