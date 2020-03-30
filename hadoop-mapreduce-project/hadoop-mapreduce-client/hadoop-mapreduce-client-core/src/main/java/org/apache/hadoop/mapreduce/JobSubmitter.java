@@ -36,10 +36,7 @@ import com.google.inject.internal.cglib.core.$DefaultNamingPolicy;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FSDataOutputStream;
-import org.apache.hadoop.fs.FileContext;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.FileInputFormat;
@@ -202,24 +199,8 @@ class JobSubmitter {
       LOG.debug("Creating splits at " + jtFs.makeQualified(submitJobDir));
       int maps = writeSplits(job, submitJobDir);
 
-
-
-      JobConf jConf = (JobConf)job.getConfiguration();
-      org.apache.hadoop.mapred.InputSplit[] splits =
-              jConf.getInputFormat().getSplits(jConf, jConf.getNumMapTasks());
-
-      List<String> paths = new ArrayList<>();
-      List<String> locations = new ArrayList<>();
-      for (Path path : FileInputFormat.getInputPaths(jConf)) {
-        paths.add(path.toString());
-      }
-      for (org.apache.hadoop.mapred.InputSplit inputSplit : splits) {
-        Collections.addAll(locations, inputSplit.getLocations());
-      }
-      saveJsonFile(new JobPrint(jobId.toString(), paths, locations));
-
-
-
+      JobSubmitterInfo jobSubmitterInfo = new JobSubmitterInfo(conf, jobId, job);
+      jobSubmitterInfo.printJobInfo();
 
       conf.setInt(MRJobConfig.NUM_MAPS, maps);
       LOG.info("number of splits:" + maps);
@@ -286,58 +267,6 @@ class JobSubmitter {
           jtFs.delete(submitJobDir, true);
 
       }
-    }
-  }
-
-  private void saveJsonFile(JobPrint jobPrint) {
-    File jsonDirectory = new File(System.getProperty("user.home") + File.separator + "JobBlocks");
-    if (!jsonDirectory.exists()) {
-      jsonDirectory.mkdir();
-    }
-    if (jsonDirectory.exists()) {
-      try {
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.writerWithDefaultPrettyPrinter().writeValue(new File(jsonDirectory + File.separator + jobPrint.getJobName() + ".json"), jobPrint);
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-    }
-  }
-
-  private static class JobPrint {
-
-    private String jobName;
-    private List<String> paths;
-    private List<String> locations;
-
-    public JobPrint(String jobName, List<String> paths, List<String> locations) {
-      this.jobName = jobName;
-      this.paths = paths;
-      this.locations = locations;
-    }
-
-    public String getJobName() {
-      return jobName;
-    }
-
-    public void setJobName(String jobName) {
-      this.jobName = jobName;
-    }
-
-    public List<String> getPaths() {
-      return paths;
-    }
-
-    public void setPaths(List<String> paths) {
-      this.paths = paths;
-    }
-
-    public List<String> getLocations() {
-      return locations;
-    }
-
-    public void setLocations(List<String> locations) {
-      this.locations = locations;
     }
   }
   
