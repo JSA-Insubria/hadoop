@@ -65,7 +65,9 @@ public class FilesInfo {
             DFSClient dfsClient = distributedFileSystem.getClient();
             try {
                 for (LocatedBlock block : dfsClient.getLocatedBlocks(path, 0).getLocatedBlocks()) {
-                    blockFileNames.add(block.getBlock().getLocalBlock().getBlockName());
+                    String blockName = block.getBlock().getLocalBlock().getBlockName() + "_"
+                            + block.getBlock().getLocalBlock().getGenerationStamp();
+                    blockFileNames.add(blockName);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
