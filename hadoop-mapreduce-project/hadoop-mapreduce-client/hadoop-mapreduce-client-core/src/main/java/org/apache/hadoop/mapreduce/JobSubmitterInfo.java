@@ -39,13 +39,13 @@ public class JobSubmitterInfo {
                 Collections.addAll(locations, inputSplit.getLocations());
             }
 
-            List<JobDataFile> jobDataFileList = new ArrayList<>();
+            List<JobDataPath> jobDataPathList = new ArrayList<>();
             FileSystem fileSystem = FileSystem.get(configuration);
             for (Path path : FileInputFormat.getInputPaths(jConf)) {
-                jobDataFileList.add(getFileInfo(path, fileSystem));
+                jobDataPathList.add(new JobDataPath(path.toString(), getFileInfo(path, fileSystem)));
             }
 
-            saveJsonFile(new JobPrint(jobId.toString(), paths, locations, jobDataFileList));
+            saveJsonFile(new JobPrint(jobId.toString(), paths, locations, jobDataPathList));
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -53,20 +53,21 @@ public class JobSubmitterInfo {
 
     }
 
-    private JobDataFile getFileInfo(Path path, FileSystem fileSystem) {
-        JobDataFile jobDataFile = null;
+    private List<JobDataFile> getFileInfo(Path path, FileSystem fileSystem) {
+        List<JobDataFile> jobDataFilesPathList = new ArrayList<>();
         try {
             RemoteIterator<LocatedFileStatus> remoteIterator = fileSystem.listLocatedStatus(path);
             while (remoteIterator.hasNext()) {
                 LocatedFileStatus locatedFileStatus = remoteIterator.next();
                 if(locatedFileStatus.isFile()) {
-                    jobDataFile = new JobDataFile(locatedFileStatus.toString(), getBlockInfo(locatedFileStatus.getBlockLocations()));
+                    jobDataFilesPathList.add(new JobDataFile(locatedFileStatus.toString(),
+                            getBlockInfo(locatedFileStatus.getBlockLocations())));
                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return jobDataFile;
+        return jobDataFilesPathList;
     }
 
 
@@ -112,13 +113,13 @@ public class JobSubmitterInfo {
         private String jobName;
         private List<String> paths;
         private List<String> locations;
-        private List<JobDataFile> jobDataFileList;
+        private List<JobDataPath> jobDataPaths;
 
-        public JobPrint(String jobName, List<String> paths, List<String> locations, List<JobDataFile> jobDataFileList) {
+        public JobPrint(String jobName, List<String> paths, List<String> locations, List<JobDataPath> jobDataPaths) {
             this.jobName = jobName;
             this.paths = paths;
             this.locations = locations;
-            this.jobDataFileList = jobDataFileList;
+            this.jobDataPaths = jobDataPaths;
         }
 
         public String getJobName() {
@@ -145,12 +146,38 @@ public class JobSubmitterInfo {
             this.locations = locations;
         }
 
-        public List<JobDataFile> getJobDataFileList() {
-            return jobDataFileList;
+        public List<JobDataPath> getJobDataPaths() {
+            return jobDataPaths;
         }
 
-        public void setJobDataFileList(List<JobDataFile> jobDataFileList) {
-            this.jobDataFileList = jobDataFileList;
+        public void setJobDataPaths(List<JobDataPath> jobDataPaths) {
+            this.jobDataPaths = jobDataPaths;
+        }
+    }
+
+    private static class JobDataPath {
+        private String path;
+        private List<JobDataFile> filesList;
+
+        public JobDataPath(String path, List<JobDataFile> filesList) {
+            this.path = path;
+            this.filesList = filesList;
+        }
+
+        public String getPath() {
+            return path;
+        }
+
+        public void setPath(String path) {
+            this.path = path;
+        }
+
+        public List<JobDataFile> getFilesList() {
+            return filesList;
+        }
+
+        public void setFilesList(List<JobDataFile> filesList) {
+            this.filesList = filesList;
         }
     }
 
