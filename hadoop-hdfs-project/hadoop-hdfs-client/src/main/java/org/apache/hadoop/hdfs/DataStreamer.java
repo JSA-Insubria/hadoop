@@ -19,13 +19,7 @@ package org.apache.hadoop.hdfs;
 
 import static org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos.Status.SUCCESS;
 
-import java.io.BufferedOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InterruptedIOException;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -1696,6 +1690,17 @@ class DataStreamer extends Daemon {
     return lb;
   }
 
+  private void printIntoJobSubmitterLog(String line) {
+    File fileName = new File(System.getProperty("user.home") + File.separator + "DataStreamer.log");
+    try {
+      FileWriter myWriter = new FileWriter(fileName, true);
+      myWriter.write(line + "\n");
+      myWriter.close();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+
   // connects to the first datanode in the pipeline
   // Returns true if success, otherwise return failure.
   //
@@ -1722,6 +1727,15 @@ class DataStreamer extends Daemon {
       try {
         assert null == s : "Previous socket unclosed";
         assert null == blockReplyStream : "Previous blockReplyStream unclosed";
+
+        printIntoJobSubmitterLog("FILE: " + src);
+        printIntoJobSubmitterLog("BLOCK: " + block.currentBlock.getLocalBlock().getBlockName());
+        printIntoJobSubmitterLog("TARGET NODE: " + nodes[0].getName());
+
+        for (DatanodeInfo datanodeInfo : nodes) {
+          printIntoJobSubmitterLog("SEND COPY TO: " + datanodeInfo.getName());
+        }
+
         s = createSocketForPipeline(nodes[0], nodes.length, dfsClient);
         long writeTimeout = dfsClient.getDatanodeWriteTimeout(nodes.length);
         long readTimeout = dfsClient.getDatanodeReadTimeout(nodes.length);
