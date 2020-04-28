@@ -17,14 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.datanode;
 
-import java.io.BufferedInputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.nio.ByteBuffer;
@@ -846,6 +839,11 @@ class BlockSender implements java.io.Closeable {
         sentEntireByteRange = true;
       }
     } finally {
+      if (clientTraceFmt != null) {
+          final long endTime = System.nanoTime();
+          printIntoHDFS_READLog(String.format(clientTraceFmt, totalRead,
+                initialOffset, endTime - startTime));
+      }
       if ((clientTraceFmt != null) && ClientTraceLog.isDebugEnabled()) {
         final long endTime = System.nanoTime();
         ClientTraceLog.debug(String.format(clientTraceFmt, totalRead,
@@ -854,6 +852,17 @@ class BlockSender implements java.io.Closeable {
       close();
     }
     return totalRead;
+  }
+
+  private void printIntoHDFS_READLog(String line) {
+    File fileName = new File(System.getProperty("user.home") + File.separator + "hdfs_read.log");
+    try {
+      FileWriter myWriter = new FileWriter(fileName, true);
+      myWriter.write(line + "\n");
+      myWriter.close();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
   }
 
   /**

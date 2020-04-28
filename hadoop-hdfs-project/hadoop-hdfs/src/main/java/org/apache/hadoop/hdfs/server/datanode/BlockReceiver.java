@@ -19,14 +19,7 @@ package org.apache.hadoop.hdfs.server.datanode;
 
 import static org.apache.hadoop.hdfs.server.datanode.DataNode.DN_CLIENTTRACE_FORMAT;
 
-import java.io.BufferedOutputStream;
-import java.io.Closeable;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.EOFException;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -1530,15 +1523,29 @@ class BlockReceiver implements Closeable {
         long offset = 0;
         DatanodeRegistration dnR = datanode.getDNRegistrationForBP(block
             .getBlockPoolId());
-        ClientTraceLog.info(String.format(DN_CLIENTTRACE_FORMAT, inAddr,
-            myAddr, block.getNumBytes(), "HDFS_WRITE", clientname, offset,
-            dnR.getDatanodeUuid(), block, endTime - startTime));
+        String clientTraceLog = String.format(DN_CLIENTTRACE_FORMAT, inAddr,
+                myAddr, block.getNumBytes(), "HDFS_WRITE", clientname, offset,
+                dnR.getDatanodeUuid(), block, endTime - startTime);
+        ClientTraceLog.info(clientTraceLog);
+        printIntoHDFS_WRITELog(clientTraceLog);
       } else {
         LOG.info("Received " + block + " size " + block.getNumBytes()
             + " from " + inAddr);
       }
     }
-    
+
+    private void printIntoHDFS_WRITELog(String line) {
+      File fileName = new File(System.getProperty("user.home") + File.separator + "hdfs_write.log");
+      try {
+        FileWriter myWriter = new FileWriter(fileName, true);
+        myWriter.write(line + "\n");
+        myWriter.close();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+
+
     /**
      * The wrapper for the unprotected version. This is only called by
      * the responder's run() method.
