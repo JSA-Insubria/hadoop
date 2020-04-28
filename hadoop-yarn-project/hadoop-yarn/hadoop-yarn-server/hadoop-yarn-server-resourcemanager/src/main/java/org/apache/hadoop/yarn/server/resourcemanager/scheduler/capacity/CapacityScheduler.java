@@ -18,6 +18,8 @@
 
 package org.apache.hadoop.yarn.server.resourcemanager.scheduler.capacity;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -1251,12 +1253,24 @@ public class CapacityScheduler extends
         .isWaitingForAMContainer()) {
       updateDemandForQueue.getOrderingPolicy().demandUpdated(application);
     }
-
+    String containerInfo = "Allocation for application " + applicationAttemptId + " : "
+            + allocation + " with cluster resource : " + getClusterResource();
+    printIntoContainerLog(containerInfo);
     if (LOG.isDebugEnabled()) {
-      LOG.info("Allocation for application " + applicationAttemptId + " : "
-          + allocation + " with cluster resource : " + getClusterResource());
+      LOG.info(containerInfo);
     }
     return allocation;
+  }
+
+  private void printIntoContainerLog(String line) {
+    File fileName = new File(System.getProperty("user.home") + File.separator + "containers.log");
+    try {
+      FileWriter myWriter = new FileWriter(fileName, true);
+      myWriter.write(line + "\n");
+      myWriter.close();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
   }
 
   @Override
