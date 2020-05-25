@@ -1,7 +1,11 @@
 package org.apache.hadoop.hdfs.server.balancer;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FsShell;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.StorageType;
+import org.apache.hadoop.fs.shell.FsCommand;
 import org.apache.hadoop.hdfs.DFSClient;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSUtilClient;
@@ -15,75 +19,113 @@ import org.apache.hadoop.hdfs.protocol.datatransfer.sasl.DataTransferSaslUtil;
 import org.apache.hadoop.hdfs.protocol.datatransfer.sasl.SaslDataTransferClient;
 import org.apache.hadoop.hdfs.protocol.proto.DataTransferProtos;
 import org.apache.hadoop.hdfs.security.token.block.BlockTokenIdentifier;
+import org.apache.hadoop.hdfs.server.protocol.DataNodeUsageReport;
+import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeStorageReport;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.net.NetUtils;
 import org.apache.hadoop.security.token.Token;
 import org.apache.hadoop.util.Time;
+import org.apache.hadoop.util.hash.Hash;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static org.apache.hadoop.hdfs.protocolPB.PBHelperClient.vintPrefixed;
 
 public class FileBalancer {
 
-    private Configuration configuration;
+    private final Configuration configuration;
 
     public FileBalancer(Configuration configuration) {
         this.configuration = configuration;
     }
 
     public boolean moveBlocks(List<NameNodeConnector> connectors) {
-        HashMap<String, String> locationMap = ReadFromFile();
+        Map<String, List<BlockFromFile>> locationMap = ReadFromFile();
             for (NameNodeConnector nameNodeConnector : connectors) {
                 DistributedFileSystem distributedFileSystem = nameNodeConnector.getDistributedFileSystem();
                 DFSClient dfsClient = distributedFileSystem.getClient();
 
-                for (Map.Entry<String, String> map : locationMap.entrySet()) {
-                    String fileNameExt = map.getKey();
+                for (Map.Entry<String, List<BlockFromFile>> filesMap : locationMap.entrySet()) {
+                    String fileNameExt = filesMap.getKey();
                     String fileName = fileNameExt.substring(0, fileNameExt.lastIndexOf("."));
-                    String nodeTarget = map.getValue();
                     String path = "/user/hive/warehouse/" + fileName + "/" + fileNameExt;
                     printIntoMoveBlocksLog("\n\nFile: " + path);
 
-                    DatanodeStorageReport node = checkIfTargetNodeExists(nameNodeConnector, nodeTarget);
-                    if (node != null) {
-                        try {
-                            for (LocatedBlock block : dfsClient.getLocatedBlocks(path, 0).getLocatedBlocks()) {
-                                BlockToMove blockToMove = new BlockToMove(getBlockSourceNode(block), node, block, nameNodeConnector);
-                                if (!checkIfBlockIsAlreadyInPosition(blockToMove)) {
+                    List<BlockFromFile> blockList = filesMap.getValue();
+
+                    try {
+                        int i = 0;
+                        for (LocatedBlock block : dfsClient.getLocatedBlocks(path, 0).getLocatedBlocks()) {
+                            List<String> nodes = blockList.get(i++).getNodes();
+                            List<DatanodeStorageReport> targetNodes = new ArrayList<>();
+
+                            try {
+                                dfsClient.setReplication(path, (short) nodes.size());
+                            } catch (IOException e) {
+                                printIntoMoveBlocksLog("Set new Replication factor Error");
+                                return true; //Return true if node not exists and then exit
+                            }
+
+                            for (String s : nodes) {
+                                DatanodeStorageReport node = checkIfTargetNodeExists(nameNodeConnector, s);
+                                if (node != null) {
+                                    targetNodes.add(node);
+                                } else {
+                                    printIntoMoveBlocksLog("Node is NULL");
+                                    return true; //Return true if node not exists and then exit
+                                }
+                            }
+
+                            DatanodeInfo[] sourceNodes = getBlockSourceNode(block);
+                            Map<DatanodeInfo, DatanodeStorageReport> replicaToMove = checkIfBlocksAreAlreadyInPosition(sourceNodes, targetNodes, nodes);
+
+                            if (!replicaToMove.isEmpty()) {
+                                for (Map.Entry<DatanodeInfo, DatanodeStorageReport> map : replicaToMove.entrySet()) {
+                                    BlockToMove blockToMove = new BlockToMove(map.getKey(), map.getValue(), block, nameNodeConnector);
                                     if (!moveBlock(blockToMove)) {
+                                        printIntoMoveBlocksLog("Block move error");
                                         return true; //Return true if moveBlock fail and then exit
                                     }
                                 }
-                                else {
-                                    printIntoMoveBlocksLog("Block " + blockToMove.block.getBlock().getBlockName()
-                                            + " already in node target");
-                                }
+                            } else {
+                                printIntoMoveBlocksLog("All Blocks are already in position");
                             }
-                        } catch (IOException e) {
-                            printIntoMoveBlocksLog("File " + fileNameExt + "not found");
                         }
-                    }
-                    else {
-                        printIntoMoveBlocksLog("Target node not found");
+                    } catch (IOException e) {
+                        printIntoMoveBlocksLog("File " + fileNameExt + "not found");
                     }
                 }
             }
         return false;
     }
 
-    private boolean checkIfBlockIsAlreadyInPosition(BlockToMove blockToMove) {
-        for (DatanodeInfo datanodeInfo : blockToMove.block.getLocations()) {
-            if (blockToMove.dataNodeTarget.getDatanodeInfo().getName().equals(datanodeInfo.getName())) {
-                return true;
+    private Map<DatanodeInfo, DatanodeStorageReport> checkIfBlocksAreAlreadyInPosition(DatanodeInfo[] sourceNodes,
+                                                                                       List<DatanodeStorageReport> targetNodes,
+                                                                                       List<String> targetNodesString) {
+
+        List<DatanodeInfo> sourcesList = new LinkedList<>(Arrays.asList(sourceNodes));
+        for (DatanodeInfo sourceNode : sourceNodes) {
+            if (targetNodesString.contains(sourceNode.getName())) {
+                targetNodesString.remove(sourceNode.getName());
+                sourcesList.remove(sourceNode);
             }
         }
-        return false;
+
+        List<DatanodeStorageReport> targetsList = new ArrayList<>();
+        for (DatanodeStorageReport datanodeStorageReport : targetNodes) {
+            if (targetNodesString.contains(datanodeStorageReport.getDatanodeInfo().getName())) {
+                targetsList.add(datanodeStorageReport);
+            }
+        }
+
+        Map<DatanodeInfo, DatanodeStorageReport> map = new HashMap<>();
+        for (int i = 0; i < sourcesList.size(); i++) {
+            map.put(sourcesList.get(i), targetsList.get(i));
+        }
+        return map;
     }
 
     private DatanodeStorageReport checkIfTargetNodeExists(NameNodeConnector nameNodeConnector, String targetNode) {
@@ -96,14 +138,13 @@ public class FileBalancer {
                 }
             }
         } catch (IOException e) {
-            printIntoMoveBlocksLog("Cluster offline");
         }
         return node;
     }
 
     //TODO How Hadoop choose replica?
-    private DatanodeInfo getBlockSourceNode(LocatedBlock locatedBlock) {
-        return locatedBlock.getLocations()[0];
+    private DatanodeInfo[] getBlockSourceNode(LocatedBlock locatedBlock) {
+        return locatedBlock.getLocations();
     }
 
     //TODO Add Check on StorageType
@@ -195,21 +236,33 @@ public class FileBalancer {
         return (blockMoveTimeout > 0 && (Time.monotonicNow() - startTime > blockMoveTimeout));
     }
 
-    private HashMap<String, String> ReadFromFile() {
-        HashMap<String, String> hashMap = new HashMap<>();
+    private Map<String, List<BlockFromFile>> ReadFromFile() {
+        Map<String, List<BlockFromFile>> map = new HashMap<>();
         try {
             BufferedReader bufferedReader = new BufferedReader(new FileReader(System.getProperty("user.home")
                     + File.separator + "FilesLocation.txt"));
             String line;
             while ((line = bufferedReader.readLine()) != null) {
                 String[] tmp = line.split(",");
-                hashMap.put(tmp[0].trim(), tmp[1].trim());
+                if (tmp.length < 2) break;
+                String fileName = tmp[0];
+                BlockFromFile blockFromFile = new BlockFromFile(new ArrayList<>(Arrays.asList(tmp).subList(1, tmp.length)));
+                List<BlockFromFile> blockList;
+                if (map.containsKey(fileName)) {
+                    blockList = map.get(fileName);
+                    blockList.add(blockFromFile);
+                    map.replace(fileName, blockList);
+                } else {
+                    blockList = new ArrayList<>();
+                    blockList.add(blockFromFile);
+                    map.put(fileName, blockList);
+                }
             }
             bufferedReader.close();
         } catch (IOException e) {
             printIntoMoveBlocksLog("File FileLocation.txt not found");
         }
-        return hashMap;
+        return map;
     }
 
     private void printIntoMoveBlocksLog(String line) {
@@ -221,6 +274,22 @@ public class FileBalancer {
             fr.close();
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private static class BlockFromFile {
+        private List<String> nodes;
+
+        public BlockFromFile(List<String> nodes) {
+            this.nodes = nodes;
+        }
+
+        public List<String> getNodes() {
+            return nodes;
+        }
+
+        public void setNodes(List<String> nodes) {
+            this.nodes = nodes;
         }
     }
 
