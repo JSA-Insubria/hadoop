@@ -8,6 +8,7 @@ import org.apache.hadoop.hdfs.protocol.LocatedBlock;
 import org.codehaus.jackson.map.ObjectMapper;
 
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,10 +39,9 @@ public class FilesInfo {
                 long fileSize = contentSummary.getLength();
 
                 BlockLocation[] blockLocations = locatedFileStatus.getBlockLocations();
-                List<String> blockIdList = getBlockId(filePath.toUri().getRawPath());
+                List<String> blockIdList = getBlockId(filePath.toUri().getRawPath(), fileSize);
 
                 List<BlockLocationsWithId> blockLocationsWithIdList = new ArrayList<>();
-
                 int i = 0;
                 for (String blockId : blockIdList) {
                     blockLocationsWithIdList.add(new BlockLocationsWithId(blockId, blockLocations[i++]));
@@ -58,13 +58,14 @@ public class FilesInfo {
         }
     }
 
-    private List<String> getBlockId(String path) {
+    private List<String> getBlockId(String path, long fileSize) {
         List<String> blockFileNames = new ArrayList<>();
         for (NameNodeConnector nameNodeConnector : nameNodeConnectors) {
             DistributedFileSystem distributedFileSystem = nameNodeConnector.getDistributedFileSystem();
             DFSClient dfsClient = distributedFileSystem.getClient();
             try {
-                for (LocatedBlock block : dfsClient.getLocatedBlocks(path, 0).getLocatedBlocks()) {
+                List<LocatedBlock> locatedBlocks = dfsClient.getLocatedBlocks(path, 0, fileSize).getLocatedBlocks();
+                for (LocatedBlock block : locatedBlocks) {
                     String blockName = block.getBlock().getLocalBlock().getBlockName() + "_"
                             + block.getBlock().getLocalBlock().getGenerationStamp();
                     blockFileNames.add(blockName);
