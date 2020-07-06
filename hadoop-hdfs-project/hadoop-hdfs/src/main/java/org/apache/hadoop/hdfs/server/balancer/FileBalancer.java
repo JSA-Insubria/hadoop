@@ -1,10 +1,7 @@
 package org.apache.hadoop.hdfs.server.balancer;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.fs.FsShell;
-import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.fs.StorageType;
+import org.apache.hadoop.fs.*;
 import org.apache.hadoop.fs.shell.FsCommand;
 import org.apache.hadoop.hdfs.DFSClient;
 import org.apache.hadoop.hdfs.DFSConfigKeys;
@@ -44,21 +41,26 @@ public class FileBalancer {
 
     public boolean moveBlocks(List<NameNodeConnector> connectors) {
         Map<String, List<BlockFromFile>> locationMap = ReadFromFile();
-            for (NameNodeConnector nameNodeConnector : connectors) {
-                DistributedFileSystem distributedFileSystem = nameNodeConnector.getDistributedFileSystem();
-                DFSClient dfsClient = distributedFileSystem.getClient();
+        for (NameNodeConnector nameNodeConnector : connectors) {
+            DistributedFileSystem distributedFileSystem = nameNodeConnector.getDistributedFileSystem();
+            DFSClient dfsClient = distributedFileSystem.getClient();
 
-                for (Map.Entry<String, List<BlockFromFile>> filesMap : locationMap.entrySet()) {
-                    String fileNameExt = filesMap.getKey();
-                    String fileName = fileNameExt.substring(0, fileNameExt.lastIndexOf("."));
-                    String path = "/user/hive/warehouse/" + fileName + "/" + fileNameExt;
-                    printIntoMoveBlocksLog("\n\nFile: " + path);
+            for (Map.Entry<String, List<BlockFromFile>> filesMap : locationMap.entrySet()) {
+                String fileNameExt = filesMap.getKey();
+                String fileName = fileNameExt.substring(0, fileNameExt.lastIndexOf("."));
+                String path = "/user/hive/warehouse/" + fileName + "/" + fileNameExt;
+                printIntoMoveBlocksLog("\n\nFile: " + path);
 
-                    List<BlockFromFile> blockList = filesMap.getValue();
+                List<BlockFromFile> blockList = filesMap.getValue();
 
-                    try {
+                try {
+                    FileSystem fileSystem = FileSystem.get(configuration);
+                    if (fileSystem != null) {
+                        ContentSummary contentSummary = fileSystem.getContentSummary(new Path(path));
+                        long fileSize = contentSummary.getLength();
                         int i = 0;
-                        for (LocatedBlock block : dfsClient.getLocatedBlocks(path, 0).getLocatedBlocks()) {
+                        List<LocatedBlock> locatedBlocks = dfsClient.getLocatedBlocks(path, 0, fileSize).getLocatedBlocks();
+                        for (LocatedBlock block : locatedBlocks) {
                             List<String> nodes = blockList.get(i++).getNodes();
                             List<DatanodeStorageReport> targetNodes = new ArrayList<>();
 
@@ -94,11 +96,12 @@ public class FileBalancer {
                                 printIntoMoveBlocksLog("All Blocks are already in position");
                             }
                         }
-                    } catch (IOException e) {
-                        printIntoMoveBlocksLog("File " + fileNameExt + "not found");
                     }
+                } catch (IOException e) {
+                    printIntoMoveBlocksLog("File " + fileNameExt + "not found");
                 }
             }
+        }
         return false;
     }
 
