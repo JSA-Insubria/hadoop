@@ -78,7 +78,13 @@ public class FilesInfo {
     }
 
     private void saveJsonFile(SingleFile singleFile) {
-        File jsonDirectory = new File(System.getProperty("user.home") + File.separator + "FilesInfo");
+        File fileDir = new File(System.getProperty("user.home")
+                + File.separator + "results"
+                + File.separator + "namenode");
+        if (!fileDir.exists()) {
+            fileDir.mkdir();
+        }
+        File jsonDirectory = new File(fileDir + File.separator + "FilesInfo");
         if (!jsonDirectory.exists()) {
             jsonDirectory.mkdir();
         }

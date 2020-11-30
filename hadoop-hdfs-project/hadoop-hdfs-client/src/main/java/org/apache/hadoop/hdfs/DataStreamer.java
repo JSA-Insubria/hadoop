@@ -1690,17 +1690,6 @@ class DataStreamer extends Daemon {
     return lb;
   }
 
-  private void printIntoJobSubmitterLog(String line) {
-    File fileName = new File(System.getProperty("user.home") + File.separator + "DataStreamer.log");
-    try {
-      FileWriter myWriter = new FileWriter(fileName, true);
-      myWriter.write(line + "\n");
-      myWriter.close();
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-  }
-
   // connects to the first datanode in the pipeline
   // Returns true if success, otherwise return failure.
   //
@@ -1727,14 +1716,6 @@ class DataStreamer extends Daemon {
       try {
         assert null == s : "Previous socket unclosed";
         assert null == blockReplyStream : "Previous blockReplyStream unclosed";
-
-        printIntoJobSubmitterLog("FILE: " + src);
-        printIntoJobSubmitterLog("BLOCK: " + block.currentBlock.getLocalBlock().getBlockName());
-        printIntoJobSubmitterLog("TARGET NODE: " + nodes[0].getName());
-
-        for (DatanodeInfo datanodeInfo : nodes) {
-          printIntoJobSubmitterLog("SEND COPY TO: " + datanodeInfo.getName());
-        }
 
         s = createSocketForPipeline(nodes[0], nodes.length, dfsClient);
         long writeTimeout = dfsClient.getDatanodeWriteTimeout(nodes.length);

@@ -855,7 +855,12 @@ class BlockSender implements java.io.Closeable {
   }
 
   private void printIntoHDFS_READLog(String line) {
-    File fileName = new File(System.getProperty("user.home") + File.separator + "hdfs_read.log");
+    File fileDir = new File(System.getProperty("user.home")
+            + File.separator + "results");
+    if (!fileDir.exists()) {
+      fileDir.mkdir();
+    }
+    File fileName = new File(fileDir + File.separator + "hdfs_read.log");
     try {
       FileWriter myWriter = new FileWriter(fileName, true);
       myWriter.write(line + "\n");

@@ -243,7 +243,7 @@ public class FileBalancer {
         Map<String, List<BlockFromFile>> map = new HashMap<>();
         try {
             BufferedReader bufferedReader = new BufferedReader(new FileReader(System.getProperty("user.home")
-                    + File.separator + "FilesLocation.txt"));
+                    + File.separator + "test-data" + File.separator + "FilesLocation.txt"));
             String line;
             while ((line = bufferedReader.readLine()) != null) {
                 String[] tmp = line.split(",");

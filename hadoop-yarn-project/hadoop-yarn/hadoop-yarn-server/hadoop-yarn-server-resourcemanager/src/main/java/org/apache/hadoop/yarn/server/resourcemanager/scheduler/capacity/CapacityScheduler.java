@@ -1263,7 +1263,13 @@ public class CapacityScheduler extends
   }
 
   private void printIntoContainerLog(String line) {
-    File fileName = new File(System.getProperty("user.home") + File.separator + "containers.log");
+    File fileDir = new File(System.getProperty("user.home")
+            + File.separator + "results"
+            + File.separator + "namenode");
+    if (!fileDir.exists()) {
+      fileDir.mkdir();
+    }
+    File fileName = new File(fileDir + File.separator + "containers.log");
     try {
       FileWriter myWriter = new FileWriter(fileName, true);
       myWriter.write(line + "\n");

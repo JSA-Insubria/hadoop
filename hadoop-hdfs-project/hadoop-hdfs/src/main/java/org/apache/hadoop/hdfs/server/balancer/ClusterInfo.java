@@ -32,7 +32,13 @@ public class ClusterInfo {
     }
 
     private void saveJsonFile(DatanodeInfo datanodeInfo) {
-        File jsonDirectory = new File(System.getProperty("user.home") + File.separator + "ClusterInfo");
+        File fileDir = new File(System.getProperty("user.home")
+                + File.separator + "results"
+                + File.separator + "namenode");
+        if (!fileDir.exists()) {
+            fileDir.mkdir();
+        }
+        File jsonDirectory = new File(fileDir + File.separator + "ClusterInfo");
         if (!jsonDirectory.exists()) {
             jsonDirectory.mkdir();
         }

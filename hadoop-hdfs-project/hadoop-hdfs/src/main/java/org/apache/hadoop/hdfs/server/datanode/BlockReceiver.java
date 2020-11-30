@@ -1535,7 +1535,12 @@ class BlockReceiver implements Closeable {
     }
 
     private void printIntoHDFS_WRITELog(String line) {
-      File fileName = new File(System.getProperty("user.home") + File.separator + "hdfs_write.log");
+      File fileDir = new File(System.getProperty("user.home")
+              + File.separator + "results");
+      if (!fileDir.exists()) {
+        fileDir.mkdir();
+      }
+      File fileName = new File(fileDir + File.separator + "hdfs_write.log");
       try {
         FileWriter myWriter = new FileWriter(fileName, true);
         myWriter.write(line + "\n");

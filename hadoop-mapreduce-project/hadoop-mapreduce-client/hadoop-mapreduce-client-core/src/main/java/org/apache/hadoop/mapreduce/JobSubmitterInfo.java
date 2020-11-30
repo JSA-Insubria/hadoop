@@ -93,7 +93,13 @@ public class JobSubmitterInfo {
     }
 
     private void saveJsonFile(JobPrint jobPrint) {
-        File jsonDirectory = new File(System.getProperty("user.home") + File.separator + "JobBlocks");
+        File fileDir = new File(System.getProperty("user.home")
+                + File.separator + "results"
+                + File.separator + "namenode");
+        if (!fileDir.exists()) {
+            fileDir.mkdir();
+        }
+        File jsonDirectory = new File(fileDir + File.separator + "JobBlocks");
         if (!jsonDirectory.exists()) {
             jsonDirectory.mkdir();
         }
